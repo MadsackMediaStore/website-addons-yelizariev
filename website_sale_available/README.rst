@@ -1,10 +1,8 @@
 Sale only available products on Website
 =======================================
 
-Module makes it impossible for users order more amount that available in stock.
+TODO
+----
+* Check quantity for "Stockable Product" only. See `#104 <https://github.com/it-projects-llc/website-addons/pull/104>`__
 
-At /shop/cart new column Available is added.
-
-After clicking Confirm Order user would be redirected back to /shop/cart if some products are out of stock while he was typing his address.
-
-Tested on Odoo 8.0 78a20a3dba07762d2de1e22072c20be1bc59d20f
+Tested on Odoo 8.0 6682bde8a202794740b9756542b5b119db7606f3
