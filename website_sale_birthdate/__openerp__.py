@@ -2,7 +2,8 @@
 {
     'name': "website_sale_birthdate",
     'author': "IT-Projects LLC, Ivan Yelizariev",
-    'license': 'GPL-3',
+    'license': 'LGPL-3',
+    "support": "apps@it-projects.info",
     'website': "https://yelizariev.github.io",
     'category': 'eCommerce',
     'version': '1.0',
@@ -10,5 +11,5 @@
     'data': [
         'views.xml',
     ],
-    'installable': True
+    'installable': False
 }

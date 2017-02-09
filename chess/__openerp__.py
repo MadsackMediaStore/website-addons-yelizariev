@@ -6,8 +6,9 @@
     "version": "1.0.0",
 
     "author": "IT-Projects LLC, Dinar Gabbasov",
+    "support": "apps@it-projects.info",
     'website': "https://twitter.com/gabbasov_dinar",
-    "license": "GPL-3",
+    "license": "LGPL-3",
 
     "depends": [
         "base",
@@ -22,5 +23,5 @@
         "views/chess_templates.xml",
     ],
 
-    "installable": True,
+    "installable": False,
 }

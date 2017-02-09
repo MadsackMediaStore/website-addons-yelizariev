@@ -1,12 +1,8 @@
-.. _changelog:
-
-Updates
-=======
-
 `1.0.1`
 -------
 
-- Background used on singup page too.
+- IMP: Background used on signup page too.
+- IMP: Round corners on form.
 
 `1.0.0`
 -------

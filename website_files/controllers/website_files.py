@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import re
 import json
-from openerp import http
-from openerp.http import request
+from odoo import http
+from odoo.http import request
 
-from openerp.addons.website.controllers.main import Website
+from odoo.addons.website.controllers.main import Website
 
 import logging
 _logger = logging.getLogger(__name__)

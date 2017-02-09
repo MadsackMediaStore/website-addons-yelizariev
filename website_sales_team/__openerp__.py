@@ -3,8 +3,9 @@
     'name': 'Sales team in eCommerce',
     'version': '1.0.0',
     'author': 'IT-Projects LLC, Ivan Yelizariev',
-    'license': 'GPL-3',
+    'license': 'LGPL-3',
     'category': 'eCommerce',
+    "support": "apps@it-projects.info",
     'website': 'https://yelizariev.github.io',
     'description': """
 Split products by sales team.

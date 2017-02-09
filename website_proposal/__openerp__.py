@@ -3,8 +3,9 @@
     'name': 'Website proposal',
     'version': '1.0.0',
     'author': 'IT-Projects LLC, Ivan Yelizariev',
-    'license': 'GPL-3',
+    'license': 'LGPL-3',
     'category': 'Website',
+    "support": "apps@it-projects.info",
     'website': 'https://yelizariev.github.io',
     'description': """
 Technical module to create web-based proposals for accepting (signing) by partner. E.g. confirmation different documents in leads.
@@ -25,7 +26,7 @@ Also module allows convert proposal to pdf.
         'security/ir.model.access.csv',
         'security/security.xml',
     ],
-    'installable': True,
+    'installable': False,
     'auto_install': False,
     'application': False,
 }

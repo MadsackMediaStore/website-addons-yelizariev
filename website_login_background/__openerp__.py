@@ -7,10 +7,11 @@
     "version": "1.0.1",
 
     "author": "IT-Projects LLC",
+    "support": "apps@it-projects.info",
     "website": "https://it-projects.info",
-    "license": "GPL-3",
-    "price": 25.00,
-    "currency": "EUR",
+    "license": "LGPL-3",
+    # "price": 25.00,
+    # "currency": "EUR",
 
     "depends": [
         "web_login_background",

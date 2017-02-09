@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 from random import choice
+import hashlib
 
-from openerp import fields, api
-from openerp import models
+from odoo import fields, api
+from odoo import models
 
 
 def _attachment2url(att):
-    return r'/web/binary/saveas?id=' + str(att.id) + r'&model=ir.attachment&field=datas&fieldname_field=datas_fname'
+    sha = hashlib.sha1(getattr(att, '__last_update')).hexdigest()[0:7]
+    return '/web/image/%s-%s' % (att.id, sha)
 
 
 class IRAttachmentBackground(models.Model):
@@ -14,7 +16,10 @@ class IRAttachmentBackground(models.Model):
 
     use_as_background = fields.Boolean("Use as login page background", default=False)
 
-    def check(self, cr, uid, ids, mode, context=None, values=None):
+    @api.multi
+    def check(self, mode, values=None):
+        ids = self.ids
+        cr = self.env.cr
         if ids and mode == 'read':
             if isinstance(ids, (int, long)):
                 ids = [ids]
@@ -25,7 +30,7 @@ class IRAttachmentBackground(models.Model):
                     ids.remove(id)
             if not ids:
                 return
-        return super(IRAttachmentBackground, self).check(cr, uid, ids, mode, context, values)
+        return super(IRAttachmentBackground, self).check(mode, values=values)
 
     @api.model
     def get_background_pic(self):

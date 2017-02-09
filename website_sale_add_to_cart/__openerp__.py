@@ -3,8 +3,9 @@
     'name': 'Quick add items to shopping cart',
     'version': '1.0.0',
     'author': 'IT-Projects LLC, Ivan Yelizariev',
-    'license': 'GPL-3',
+    'license': 'LGPL-3',
     'category': 'eCommerce',
+    "support": "apps@it-projects.info",
     'website': 'https://twitter.com/yelizariev',
     'price': 9.00,
     'currency': 'EUR',
@@ -13,5 +14,5 @@
     'data': [
         'website_sale_add_to_cart_views.xml',
     ],
-    'installable': True
+    'installable': False
 }

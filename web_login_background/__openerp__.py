@@ -7,9 +7,10 @@
     "version": "1.0.1",
 
     "author": "IT-Projects LLC, Ildar Nasyrov",
+    "support": "apps@it-projects.info",
     "website": "https://it-projects.info",
-    "license": "GPL-3",
-    "price": 15.00,
+    "license": "LGPL-3",
+    "price": 40.00,
     "currency": "EUR",
 
     "depends": [
@@ -25,4 +26,5 @@
     ],
     "installable": True,
     "auto_install": False,
+
 }
