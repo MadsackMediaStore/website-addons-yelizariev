@@ -7,12 +7,12 @@
     'category': 'eCommerce',
     "support": "apps@it-projects.info",
     'website': 'https://twitter.com/yelizariev',
-    'price': 9.00,
+    'price': 15.00,
     'currency': 'EUR',
     'depends': ['website_sale'],
     'images': ['images/shop.png'],
     'data': [
         'website_sale_add_to_cart_views.xml',
     ],
-    'installable': False
+    'installable': True
 }

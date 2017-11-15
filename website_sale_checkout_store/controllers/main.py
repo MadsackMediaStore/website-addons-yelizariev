@@ -19,7 +19,7 @@ class WebsiteSaleExtended(WebsiteSale):
         values = self.checkout_values()
         values['order'] = order
         sale_order_id = request.session.get('sale_order_id')
-        request.env["sale.order"].browse(sale_order_id).payment_and_delivery_method_info()
+        request.env["sale.order"].browse(sale_order_id).sudo().payment_and_delivery_method_info()
         return request.render("website_sale.checkout", values)
 
     @http.route(['/shop/payment'], type='http', auth="public", website=True)
@@ -40,9 +40,9 @@ class WebsiteSaleExtended(WebsiteSale):
         else:
             return super(WebsiteSaleExtended, self).payment_get_status(sale_order_id, **post)
 
-    def checkout_form_validate(self, data):
+    def checkout_form_validate(self, *args, **kwargs):
         self.set_custom_mandatory_fields()
-        return super(WebsiteSaleExtended, self).checkout_form_validate(data)
+        return super(WebsiteSaleExtended, self).checkout_form_validate(*args, **kwargs)
 
     def checkout_parse(self, address_type, data, remove_prefix=False):
         self.set_custom_mandatory_fields()

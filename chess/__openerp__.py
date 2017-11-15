@@ -14,14 +14,24 @@
         "base",
         "website",
         "bus",
+        "web",
     ],
-    "external_dependencies": {"python": [], "bin": []},
+    "external_dependencies": {
+        "python": [
+            "chess",
+        ],
+        "bin": []
+    },
     "data": [
         "security/ir.model.access.csv",
         "security/security.xml",
         "views/chess_views.xml",
+        "views/chess.xml",
         "views/chess_templates.xml",
+        "views/tournament_views.xml",
+        "views/tournament_templates.xml",
     ],
+    "qweb": ['static/xml/*.xml'],
 
-    "installable": False,
+    "installable": True,
 }

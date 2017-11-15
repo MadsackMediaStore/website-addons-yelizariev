@@ -1,11 +1,11 @@
-$(document).ready(function() {
+odoo.define('chess.common', function (require) {
     "use strict";
     var pos = [];
     var game = {};
     var board ={};
     var turn = '';
     var storage = localStorage;
-    var ChessGame = openerp.ChessGame = {};
+    var ChessGame = {};
     var first_step_move = true;
     var author_player_color = '';
     var another_player_color = '';
@@ -13,36 +13,42 @@ $(document).ready(function() {
     var time_limited = false;
     var start_time_refer = true;
     var ref_bw = true;
+    var Widget = require('web.Widget');
+    var bus = require('bus.bus');
+    var session = require('web.session');
+    var utils = require('web.utils');
+
     ChessGame.COOKIE_NAME = 'chessgame_session';
-    ChessGame.GameManager = openerp.Widget.extend({
+    ChessGame.GameManager = Widget.extend({
         init: function (model_game_id, dbname, uid) {
             this._super();
             var self = this;
             this.game_id = model_game_id;
             var channel_line = JSON.stringify([dbname, 'chess.game.line', [uid, this.game_id]]);
             var channel_game = JSON.stringify([dbname, 'chess.game', [uid, this.game_id]]);
+            var channel_chat = JSON.stringify([dbname, 'chess.game.chat', [uid, this.game_id]]);
+            var channel_game_info = JSON.stringify([dbname, 'chess.game.info', [uid, model_game_id]]);
             var bus_last = 0;
             Number(storage.getItem("bus_last"))==null ? bus_last=this.bus.last : bus_last=Number(storage.getItem("bus_last"));
-
             // start the polling
-            this.bus = openerp.bus.bus;
+            this.bus = bus.bus;
             this.bus.last = bus_last;
             this.bus.add_channel(channel_line);
             this.bus.add_channel(channel_game);
+            this.bus.add_channel(channel_chat);
+            this.bus.add_channel(channel_game_info);
             this.bus.on("notification", this, this.on_notification);
             this.bus.start_polling();
         },
+
         on_notification: function (notification) {
-            var self = this;
-            if (typeof notification[0][0] === 'string') {
-                notification = [notification];
-            }
             for (var i = 0; i < notification.length; i++) {
                 var channel = notification[i][0];
                 var message = notification[i][1];
                 this.on_notification_do(channel, message);
             }
         },
+
         on_notification_do: function (channel, message) {
             var self = this;
             var channel = JSON.parse(channel);
@@ -54,8 +60,93 @@ $(document).ready(function() {
                     error = err;
                     console.error(err);
                 }
+            } else if (Array.isArray(channel) && (channel[1] === 'chess.game.chat')) {
+                try {
+                    this.chat_received_message(message);
+                } catch (err) {
+                    error = err;
+                    console.error(err);
+                }
+            } else if (Array.isArray(channel) && (channel[1] === 'chess.game.info')) {
+                try {
+                    self.create_game(message);
+                } catch (err) {
+                    error = err;
+                    console.error(err);
+                }
+            }
+
+        },
+
+        create_game: function(message) {
+            if(message.system_status=="Active game") {
+                window.new_game = new ChessGame.GameConversation(window.model_game_id, window.model_dbname, window.model_author_id);
+                window.new_game.game_pgn_click();
+                swal({   title: "Lets go!",   timer: 1000,   showConfirmButton: false });
+                $('.header p:nth-child(2)').html(message.system_status);
+                storage.setItem("bus_last", this.bus.last);
+            }
+            if(message.system_status=="Canceled") {
+                window.create_new_game.stop_polling();
+                swal(
+                {
+                    title: "Game canceled",
+                    confirmButtonText: "Ok",
+                },
+                    function(isConfirm) {
+                        if (window.tournament) {
+                            window.location.replace('/chess/tournament/' + window.tournament);
+                        } else {
+                        window.location.replace('/chess/');
+                        }
+                    }
+                );
+                return false;
+            }
+            if(message.system_status=="Denied") {
+                window.create_new_game.stop_polling();
+                swal(
+                    {
+                        title: "User refused to play",
+                        confirmButtonText: "Ok",
+                    },
+                        function(isConfirm) {
+                            if (window.tournament) {
+                                window.location.replace('/chess/tournament/' + window.tournament);
+                            } else {
+                            window.location.replace('/chess/');
+                            }
+                        }
+                    );
+                return false;
             }
         },
+
+        chat_received_message: function (message) {
+            var error = false;
+            try {
+                var date = new Date();
+                var values = [date.getDate(), date.getMonth() + 1];
+                for (var id in values) {
+                    values[id] = values[id].toString().replace(/^([0-9])$/, '0$1');
+                }
+                var time_now = date.getHours() + ':' + date.getMinutes() + ':' + date.getSeconds();
+                message.time = values[0] + '.' + values[1] + '.' + date.getFullYear() + ' ' + time_now;
+
+                $("#window_chat").append("<p><span class='user'>" + (message.author_name) +
+                    ":</span> " + (message.data.replace(/&/gm,'&amp;').replace(/</gm,'&lt;').replace(/>/gm,'&gt;')) + "<br> <span class='time_message'>" +
+                    (message.time) + "</span></p>");
+                $('.chat .user').seedColors(); //the random color
+                $("#window_chat").each(function () {
+                    this.scrollTop = this.scrollHeight;
+                });
+
+            } catch (err) {
+                error = err;
+                console.error(err);
+            }
+        },
+
         received_message: function(message) {
             var self = this;
             var error = false;
@@ -64,6 +155,7 @@ $(document).ready(function() {
                     return false;
                 }
                 if (message.type == 'move') {
+
                     self.onDrop(message.data.source, message.data.target);
                     board.position(game.fen());
                     if(new_game.game_type=='blitz') {
@@ -94,9 +186,14 @@ $(document).ready(function() {
                         swal({
                             title: "You win!",
                             text: message.data.user + ' surrendered',
-                            timer: 2000,
                             type: "success",
-                            showConfirmButton: false
+                        },
+                        function(isConfirm) {
+                            if (window.tournament) {
+                                window.location.replace('/chess/tournament/' + window.tournament);
+                            } else {
+                            window.location.replace('/chess/');
+                            }
                         });
                         $('#surrender').hide();
                         $('#suggest_a_draw').hide();
@@ -114,32 +211,46 @@ $(document).ready(function() {
                             cancelButtonText: "No",
                             closeOnConfirm: false
                         },
-                            function(isConfirm){
+                            function(isConfirm) {
                                 if (isConfirm) {
                                     swal({
                                         title: "Game over",
                                         text: "Drawn position",
-                                        timer: 2000,
                                         type: "success",
-                                        showConfirmButton: false
-                                    });
+                                    },
+                                        function(isConfirm) {
+                                            if (window.tournament) {
+                                                window.location.replace('/chess/tournament/' + window.tournament);
+                                            } else {
+                                            window.location.replace('/chess/');
+                                            }
+                                        }
+                                    );
                                     $('#surrender').hide();
                                     $('#suggest_a_draw').hide();
                                     var data = {'status': 'agreement'};
                                     var message = {'type': 'system', 'data': data};
                                     new_game.send_move(message);
                                     new_game.game_over("Game over, draw position");
+                                } else {
+                                    swal('Canceled.');
+                                    var data = {'status': 'draw_rejection'};
+                                    var message = {'type': 'system', 'data': data};
+                                    new_game.send_move(message);
+                                    }
                                 }
-                            });
+                            );
                     }
-                    if (message.data.status == 'agreement') {
-                        swal({
-                            title: "Game over",
-                            text: "Drawn position",
+                    if (message.data.status == 'draw_rejection') {
+                            swal({
+                            title: "Refusal",
+                            text: "Your opponent refused to a draw.",
                             timer: 2000,
                             type: "success",
                             showConfirmButton: false
                         });
+                    }
+                    if (message.data.status == 'agreement') {
                         $('#surrender').hide();
                         $('#suggest_a_draw').hide();
                         var status = 'Game over, draw position';
@@ -147,6 +258,18 @@ $(document).ready(function() {
                         var cookie_name = ChessGame.COOKIE_NAME+self.game_id;
                         document.cookie = cookie_name + "=" + "; expires=-1";
                         new_game.user_surrender(status);
+                        swal({
+                            title: "Game over",
+                            text: "Drawn position",
+                            type: "success",
+                        },
+                        function(isConfirm) {
+                            if (window.tournament) {
+                                window.location.replace('/chess/tournament/' + window.tournament);
+                            } else {
+                            window.location.replace('/chess/');
+                            }
+                        });
                     }
                     if (message.data.status == '') {
                         return false;
@@ -170,12 +293,11 @@ $(document).ready(function() {
             new_game.updateStatus();
         }
     });
-    ChessGame.GameConversation = openerp.Widget.extend({
-        init: function(model_game_id, dbname, uid){
-            this._super();
+
+    ChessGame.GameConversation = Widget.extend({
+        init: function(model_game_id, dbname, uid, tournament){
             var self = this;
-            openerp.session = new openerp.Session();
-            this.c_manager = new openerp.ChessGame.GameManager(model_game_id, dbname, uid);
+            this._super();
             console.log("Initial Game");
             this.history = true;
             this.history_loading = false;
@@ -185,7 +307,7 @@ $(document).ready(function() {
             this.game_over_status = '';
             this.system_status = '';
             this.game_id = model_game_id;
-
+            this.tournament = tournament;
             game = new Chess();
             this.statusEl = $('#status');
             this.fenEl = $('#fen');
@@ -197,28 +319,26 @@ $(document).ready(function() {
             this.lenOldFen = ((this.OLD_FEN_POSITION.split('/')).join('')).replace(/[0-9]/g, '').length;
             this.start();
         },
+
         start: function(){
             var self = this;
             var cookie_name = ChessGame.COOKIE_NAME+self.game_id;
-            //when game to finished is coockies is delete
-            var cookie = openerp.get_cookie(cookie_name);
+            var cookie = utils.get_cookie(cookie_name);
             var ready;
             if (!cookie) {
-                openerp.session.rpc("/chess/game/init", {game_id: self.game_id})
+                session.rpc("/chess/game/init", {game_id: self.game_id})
                     .then(function(result) {
                         //author
                         self.author_name = result.author.name;
                         self.author_id = result.author.id;
                         self.author_color = result.author.color;
                         self.author_time = result.author.time;
-
                         turn = self.author_color;
                         //another user
                         self.another_user_name = result.another_user.name;
                         self.another_user_id = result.another_user.id;
                         self.another_user_color = result.another_user.color;
                         self.another_user_time = result.another_user.time;
-
                         //game information
                         self.game_id = result.information.id;
                         self.game_type = result.information.type;
@@ -233,8 +353,8 @@ $(document).ready(function() {
                         author_player_color = self.author_id;
                         another_player_color = self.another_user_id;
 
-                        //save all data in coockie
-                        openerp.set_cookie(cookie_name, JSON.stringify({
+                        //save all data in cookie
+                        set_cookie(cookie_name, JSON.stringify({
                             'author': {
                                 'name': self.author_name,
                                 'id':self.author_id,
@@ -264,13 +384,11 @@ $(document).ready(function() {
                 self.author_id = coockie_game.author.id;
                 self.author_color = coockie_game.author.color;
                 turn = self.author_color;
-
                 //another user
                 self.another_user_name = coockie_game.another_user.name;
                 self.another_user_id = coockie_game.another_user.id;
                 self.another_user_color = coockie_game.another_user.color;
                 //self.another_user_time = coockie_game.another_user.time;
-
                 //game information
                 self.game_id = coockie_game.information.id;
                 self.game_type = coockie_game.information.type;
@@ -287,6 +405,7 @@ $(document).ready(function() {
                 self.call_load_system_message(coockie_game.information.id);
             }
         },
+
         onOrientation: function(){
             if (this.author_color==='black') return 'black';
             else return 'white';
@@ -307,6 +426,7 @@ $(document).ready(function() {
             $('#flipOrientationBtn').on('click', board.flip);
             this.updateStatus();
         },
+
         onGameType: function(game_type, author_time, another_user_time){
             var self = this;
             if(self.system_status=='Game Over'){
@@ -337,15 +457,17 @@ $(document).ready(function() {
                 }
             }
         },
+
         call_load_system_message: function(game_id) {
             var self = this;
-            openerp.session.rpc("/chess/game/system_history", {'game_id': game_id }).then(function (result) {
+            session.rpc("/chess/game/system_history", {'game_id': game_id }).then(function (result) {
                 self.call_load_history(game_id, result);
             });
         },
+
         call_load_history: function(game_id, result){
             var self = this;
-            openerp.session.rpc("/chess/game/history", {'game_id': game_id }).then(function (history) {
+            session.rpc("/chess/game/history", {'game_id': game_id }).then(function (history) {
                 if(history){
                     self.history_loading = true;
                     self.check_status = true;
@@ -365,7 +487,7 @@ $(document).ready(function() {
                 }
                 else{
                     var cookie_name = ChessGame.COOKIE_NAME+self.game_id;
-                    var cookie = openerp.get_cookie(cookie_name);
+                    var cookie = utils.get_cookie(cookie_name);
                     var coockie_game = JSON.parse(cookie);
                     self.author_time = coockie_game.author.time;
                     self.another_user_time = coockie_game.another_user.time;
@@ -373,6 +495,7 @@ $(document).ready(function() {
                 }
             });
         },
+
         load_time_history: function (history, resultat) {
             var self = this;
             var error = false;
@@ -391,7 +514,7 @@ $(document).ready(function() {
                     time_turn = 'bb';
                 }
                 if (self.game_type == 'blitz' || self.game_type == 'limited time') {
-                    openerp.session.rpc("/chess/game/load_time", {'game_id': self.game_id, 'turn': time_turn})
+                    session.rpc("/chess/game/load_time", {'game_id': self.game_id, 'turn': time_turn})
                         .then(function (result) {
                             self.author_time = result.author_time;
                             self.another_user_time = result.another_user_time;
@@ -434,6 +557,7 @@ $(document).ready(function() {
                 }
             }
         },
+
         showConfirmation: function(history, result){
             var self = this;
             if (this.history){
@@ -520,6 +644,7 @@ $(document).ready(function() {
             }
             this.history=false;
         },
+
         onDragStart: function (source, piece, position, orientation) {
             var self = this;
             board.position(game.fen());
@@ -543,6 +668,7 @@ $(document).ready(function() {
                 return false;
             }
         },
+
         onDrop: function (source, target) {
             var self = this;
             // see if the move is legal
@@ -563,12 +689,13 @@ $(document).ready(function() {
             new_game.onDelFigure();
             new_game.updateStatus();
         },
+
         send_move: function(message){
             var self = this;
             self.check_status = false;
             self.coockie_status = true;
             ref_bw = true;
-            openerp.session.rpc("/chess/game/send/", {message: message, game_id: self.game_id})
+            session.rpc("/chess/game/send/", {message: message, game_id: self.game_id})
                 .then(function(result){
                     if(result=='move'){
                         if(self.game_type=='blitz') {
@@ -616,11 +743,13 @@ $(document).ready(function() {
                     }
                 });
         },
+
         onSnapEnd: function () {
             // update the board position after the piece snap
             // for castling, en passant, pawn promotion
             board.position(game.fen());
         },
+
         updateStatus: function () {
             var self = this;
             var status = '';
@@ -636,11 +765,37 @@ $(document).ready(function() {
             // checkmate?
             if (game.in_checkmate() === true) {
                 if((game.turn()=== 'b' && self.author_color=='black') || (game.turn() === 'w' && self.author_color=='white')) {
-                    setTimeout(function () {swal("Game Over", moveColor + " is in checkmate. You lose", "error");}, 100);
+                    setTimeout(function () {
+                        swal({
+                            title:"Game Over",
+                            text: moveColor + " is in checkmate. You lose",
+                            type: "error"},
+                        function(isConfirm) {
+                            if (window.tournament) {
+                                window.location.replace('/chess/tournament/' + window.tournament);
+                            } else {
+                            window.location.replace('/chess/');
+                            }
+                        }
+                        )
+                    ;}, 100);
                     status = moveColor + ' is in checkmate. You lose';
                 }
                 if((game.turn()=== 'b' && self.author_color=='white') || (game.turn()=== 'w' && self.author_color=='black')) {
-                    setTimeout(function () {swal("Game Over", moveColor + " is in checkmate. You win!", "success");}, 100);
+                    setTimeout(function () {
+                        swal({
+                            title:"Game Over",
+                            text: moveColor + " is in checkmate. You win!",
+                            type: "success"},
+                        function(isConfirm) {
+                            if (window.tournament) {
+                                window.location.replace('/chess/tournament/' + window.tournament);
+                            } else {
+                            window.location.replace('/chess/');
+                            }
+                        }
+                        )
+                    ;}, 100);
                     status = moveColor + ' is in checkmate. You win!';
                 }
                 self.game_over_status = moveColor;
@@ -653,7 +808,20 @@ $(document).ready(function() {
             // draw?
             else if (game.in_draw() === true) {
                 status = 'Game over, drawn position.';
-                setTimeout(function () {swal("Game Over", "is drawn position", "error");}, 100);
+                setTimeout(function () {
+                    swal({
+                        title: "Game Over",
+                        text: "is drawn position",
+                        type: "error"},
+                    function(isConfirm) {
+                        if (window.tournament) {
+                            window.location.replace('/chess/tournament/' + window.tournament);
+                        } else {
+                        window.location.replace('/chess/');
+                        }
+                    }
+                    )
+                    ;}, 100);
                 self.game_over_status='drawn';
                 if (self.game_status!='Game Over') {
                     self.game_over("Game Over, is drawn position");
@@ -699,22 +867,25 @@ $(document).ready(function() {
                             },
                             function (isConfirm) {
                                 if (isConfirm) {
-                                    swal({
-                                        title: "Game over",
-                                        text: 'You lose',
-                                        timer: 2000,
-                                        type: "error",
-                                        showConfirmButton: false
-                                    });
                                     status = 'Game over, you lose. You surrender';
                                     //send system message (user is surrender)
-                                    if (self.coockie_status) {
                                         var data = {'status': 'surrender', 'user': self.author_name};
                                         var message = {'type': 'system', 'data': data};
                                         self.send_move(message);
                                         self.game_over_status=self.author_color;
                                         self.game_over(status);
-                                    }
+                                    swal({
+                                        title: "Game over",
+                                        text: 'You lose',
+                                        type: "error",
+                                    },
+                                    function(isConfirm) {
+                                        if (window.tournament) {
+                                            window.location.replace('/chess/tournament/' + window.tournament);
+                                        } else {
+                                        window.location.replace('/chess/');
+                                        }
+                                    });
                                 }
                             });
                     }, 100);
@@ -725,7 +896,6 @@ $(document).ready(function() {
                 self.game_over_status=self.author_color;
                 self.game_over(status);
             }
-
             // suggest a draw?
             $('.end_game #suggest_a_draw').click(function(){
                 swal({
@@ -761,26 +931,24 @@ $(document).ready(function() {
             var load_pgn = game.pgn();
             this.pgnEl.html(load_pgn.replace(game.fen(), ''));
         },
+
         game_over: function(status) {
             if (this.system_status=='Game Over') {
                 return false;
             }
             $('.chess_information .chess_time_usr').hide();
             console.log('Game Over');
-
             //delete cookie
             var cookie_name = ChessGame.COOKIE_NAME+this.game_id;
             document.cookie = cookie_name + "=" + "; expires=-1";
-
             var self = this;
             var status_game = self.game_over_status;
-
             if (time_limited) {
                 not_win_user_id = not_win_user_id;
             } else {
                 not_win_user_id = false;
             }
-            openerp.session.rpc("/chess/game/game_over/", {'game_id': self.game_id, 'status': status_game.toLowerCase(), 'time_limit_id': not_win_user_id})
+            session.rpc("/chess/game/game_over/", {'game_id': self.game_id, 'status': status_game.toLowerCase(), 'time_limit_id': not_win_user_id})
                 .then(function(result){
                     if(result) {
                         $('#surrender').hide();
@@ -789,6 +957,7 @@ $(document).ready(function() {
                     }
                 });
         },
+
         onDelFigure: function () {
             /* It is only important as a shortened post we will use
              only to determine the remote pieces on the board */
@@ -846,7 +1015,6 @@ $(document).ready(function() {
                     var DelWF = html;
                     this.DelWEl.html(DelWF);
                 }
-                
 
                 if (BlackArr.length > 0) {
                     var imagesHTML = {
@@ -882,6 +1050,7 @@ $(document).ready(function() {
                 this.lenOldFen = this.lenOldFen - 1;
             }
         },
+
         user_surrender: function (status) {
             var self = this;
             $('.chess_information .chess_time_usr').hide();
@@ -914,6 +1083,7 @@ $(document).ready(function() {
                 self.reset(Math.round(self.author_time), Math.round(self.another_user_time));
             }
         },
+
         clockClicked : function(id) {
             if (game.game_over()==false) {
                 var self = this;
@@ -968,9 +1138,14 @@ $(document).ready(function() {
                     swal({
                         title: "Game over",
                         text: "Time limit. You lose",
-                        timer: 2000,
                         type: "error",
-                        showConfirmButton: false
+                    },
+                    function(isConfirm) {
+                        if (window.tournament) {
+                            window.location.replace('/chess/tournament/' + window.tournament);
+                        } else {
+                        window.location.replace('/chess/');
+                        }
                     });
                     not_win_user_id = author_player_color;
                     time_limited = true;
@@ -979,9 +1154,14 @@ $(document).ready(function() {
                     swal({
                         title: "Game over",
                         text: "Time limit. You win! =)",
-                        timer: 2000,
                         type: "success",
-                        showConfirmButton: false
+                    },
+                        function(isConfirm) {
+                            if (window.tournament) {
+                                window.location.replace('/chess/tournament/' + window.tournament);
+                            } else {
+                            window.location.replace('/chess/');
+                            }
                     });
                     status = 'Game over, time limit. You win!';
                     not_win_user_id = another_player_color;
@@ -992,6 +1172,7 @@ $(document).ready(function() {
                 }
             }
         },
+
         reset : function(author_time, another_user_time) {
             /* reset the times */
 
@@ -1008,10 +1189,12 @@ $(document).ready(function() {
             /* update the view */
             this.updateView();
         },
+
         updateView : function() {
             this.updateClock(0, this.times[0]);
             this.updateClock(1, this.times[1]);
         },
+
         updateClock : function(id, time) {
             var self = this;
             element = document.getElementById("clock"+id);
@@ -1027,6 +1210,7 @@ $(document).ready(function() {
                 this.removeClass(id, "expired");
             }
         },
+
         addClass : function(id, className) {
             element = document.getElementById("clock"+id);
             element.className += " " + className;
@@ -1037,6 +1221,7 @@ $(document).ready(function() {
             var exp = new RegExp(className);
             element.className = element.className.replace( exp , '' );
         },
+
         formatTime : function(time) {
             var minutes = Math.floor(time / 60);
             var seconds = Math.floor(time % 60);
@@ -1056,6 +1241,7 @@ $(document).ready(function() {
 
             return result;
         },
+
         game_pgn_click: function(){
             new_game.pgnEl.on('click', 'a',function(event) {
                 event.preventDefault();
@@ -1068,11 +1254,7 @@ $(document).ready(function() {
     });
 
     var element = document.getElementById('board');
-    if (!element) {
-        return;
-    }
-
-    openerp.set_cookie = function(name, value, ttl) {
+    var set_cookie = function(name, value, ttl) {
         ttl = ttl || 24*60*60*365;
         document.cookie = [
             name + '=' + value,
@@ -1080,6 +1262,10 @@ $(document).ready(function() {
             'max-age=' + ttl,
             'expires=' + new Date(new Date().getTime() + ttl*1000).toGMTString()
         ].join(';');
+    };
+
+    return {
+        ChessGame: ChessGame,
     };
 
 });

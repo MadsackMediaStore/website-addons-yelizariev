@@ -1,31 +1,34 @@
-//For odoo 8.0
-(function() {
+odoo.define('chess.chesschat', function (require) {
     "use strict";
-    var ChessChat = openerp.ChessChat = {};
+    var Widget = require('web.Widget');
+    var session = require('web.session');
+    var set_cookie = require('chess.common');
+    var utils = require('web.utils');
+    var bus = require('bus.bus');
+    var ChessChat = {};
+
     ChessChat.COOKIE_NAME = 'chesschat_session';
-    ChessChat.ConversationManager = openerp.Widget.extend({
-        init: function (model_game_id, dbname, uid) {
-            this._super();
-            console.log("Initial Chat");
-            var self = this;
-            var game_id = model_game_id;
-            var channel = JSON.stringify([dbname, 'chess.game.chat', [uid, game_id]]);
-            this.bus = openerp.bus.bus;
-            this.bus.add_channel(channel);
-            this.bus.on("notification", this, this.on_notification);
-            //this.bus.start_polling();
+    ChessChat.Conversation = Widget.extend({
+        className: "chat_form",
+        init: function(model_game_id, dbname, uid){
+            var element = document.getElementById('chat');
+            if (!element) {
+                return;
+            }
+            this.game_id = model_game_id;
+            this.history = true;
+            this.opening_chat = false;
         },
+
         on_notification: function (notification) {
             var self = this;
-            if (typeof notification[0][0] === 'string') {
-                notification = [notification];
-            }
             for (var i = 0; i < notification.length; i++) {
                 var channel = notification[i][0];
                 var message = notification[i][1];
                 this.on_notification_do(channel, message);
             }
         },
+
         on_notification_do: function (channel, message) {
             var channel = JSON.parse(channel);
             var error = false;
@@ -38,43 +41,7 @@
                 }
             }
         },
-        received_message: function(message) {
-            var error = false;
-            try {
-                var date = new Date();
-                var values = [date.getDate(), date.getMonth() + 1];
-                for (var id in values) {
-                    values[id] = values[id].toString().replace(/^([0-9])$/, '0$1');
-                }
-                var time_now = date.getHours() + ':' + date.getMinutes() + ':' + date.getSeconds();
-                message.time = values[0] + '.' + values[1] + '.' + date.getFullYear() + ' ' + time_now;
 
-                $("#window_chat").append("<p><span class='user'>" + (message.author_name) +
-                    ":</span> " + (message.data.replace(/&/gm,'&amp;').replace(/</gm,'&lt;').replace(/>/gm,'&gt;')) + "<br> <span class='time_message'>" +
-                    (message.time) + "</span></p>");
-                $('.chat .user').seedColors(); //the random color
-                $("#window_chat").each(function () {
-                    this.scrollTop = this.scrollHeight;
-                });
-            } catch (err) {
-                error = err;
-                console.error(err);
-            }
-        }
-    });
-    ChessChat.Conversation = openerp.Widget.extend({
-        className: "chat_form",
-        init: function(model_game_id, dbname, uid){
-            var element = document.getElementById('chat');
-            if (!element) {
-                return;
-            }
-            this.game_id = model_game_id;
-            openerp.session = new openerp.Session();
-            this.c_manager = new openerp.ChessChat.ConversationManager(model_game_id, dbname, uid);
-            this.history = true;
-            this.opening_chat = false;
-        },
         start: function() {
             if (this.opening_chat) {
                 return;
@@ -83,21 +50,21 @@
             var self = this;
             var cookie_name = ChessChat.COOKIE_NAME+self.game_id;
             //when game to finished is coockies is delete
-            var cookie = openerp.get_cookie(cookie_name);
+            var cookie = utils.get_cookie(cookie_name);
             var ready;
             if (!cookie) {
-                ready = openerp.session.rpc("/chess/game/chat/init", {game_id: self.game_id}).then(function (result) {
+                ready = session.rpc("/chess/game/chat/init", {game_id: self.game_id}).then(function (result) {
                     self.author_name = result.author_name; // current user
                     self.author_id = result.author_id;
                     self.game_id = result.game_id;
-                    openerp.set_cookie(cookie_name, JSON.stringify({'game_id': self.game_id, 'author_name': self.author_name, 'author_id': self.author_id}), 30*24*60*60);
+                    set_cookie(cookie_name, JSON.stringify({'game_id': self.game_id, 'author_name': self.author_name, 'author_id': self.author_id}), 30*24*60*60);
                 });
             } else {
                 var game = JSON.parse(cookie);
                 self.author_name = game.author_name; // current user
                 self.author_id = game.author_id;
                 self.game_id = game.game_id;
-                ready = openerp.session.rpc("/chess/game/chat/history", {game_id: game.game_id}).then(function (history) {
+                ready = session.rpc("/chess/game/chat/history", {game_id: game.game_id}).then(function (history) {
                     if (history) {
                         self.load_history(history);
                     }
@@ -108,6 +75,7 @@
             }
             return ready;
         },
+
         load_history: function(history){
             if(this.history) {
                 history.forEach(function (item, i, history) {
@@ -124,17 +92,19 @@
         },
         send_message: function(message) {
             var self = this;
-            openerp.session.rpc("/chess/game/chat/send/", {message: message, game_id: self.game_id})
+            return session
+                .rpc("/chess/game/chat/send/", {message: message, game_id: self.game_id})
                 .then(function (result) {
                     if(result) {
                         self.received_message(message);
-                        console.log("Message is send.");
+                        console.log("Message is sent.");
                     } else {
-                        console.log("Error. Message is not send.");
+                        console.log("Error. Message not sent.");
                         console.log("No response from the server.");
                     }
                 });
         },
+
         received_message: function (message) {
             var error = false;
             try {
@@ -153,25 +123,28 @@
                 $(".chat #window_chat").each(function () {
                     this.scrollTop = this.scrollHeight;
                 });
-
             } catch (err) {
                 error = err;
                 console.error(err);
             }
         },
+
         checked_chat: function(){
             if($("#toggle_chat").prop("checked")) {
                 this.start();
             }
         },
+
         keydown: function(e) {
             if (e.keyCode == 13 && e.ctrlKey){
                this.select_message();
             }
         },
+
         click_send: function(){
             this.select_message();
         },
+
         select_message: function() {
             $('.chat .error').remove();
             var message = {};
@@ -193,7 +166,7 @@
             this.send_message(message);
         }
     });
-    openerp.set_cookie = function(name, value, ttl) {
+    set_cookie = function(name, value, ttl) {
         ttl = ttl || 24*60*60*365;
         document.cookie = [
             name + '=' + value,
@@ -202,10 +175,11 @@
             'expires=' + new Date(new Date().getTime() + ttl*1000).toGMTString()
         ].join(';');
     };
+    $(document).ready(function() {
     if (window.model_game_id===undefined) {
         return false;
     } else {
-        var my_chat = new ChessChat.Conversation(model_game_id, model_dbname, model_author_id);
+         var my_chat = new ChessChat.Conversation(model_game_id, model_dbname, model_author_id);
     }
 
     $(".toggle_chat").click(function(){
@@ -233,9 +207,12 @@
         }
     });
 
-    /* delet checked attribut, when page is referech */
-    var allCheckboxes = $(".messages_container input:checkbox:enabled");
-    allCheckboxes.removeAttr('checked');
+
+    /* deletes checked attribute, when page is refreshed */
+//    var allCheckboxes = $(".messages_container input:checkbox:enabled");
+//    allCheckboxes.removeAttr('checked');
+    $('#toggle_chat').trigger('click');
+    $('#toggle_chat').prop('checked');
 
     function openbox(id, toggler) {
         var div = document.getElementById(id);
@@ -247,7 +224,15 @@
             toggler.innerHTML = 'Close';
         }
     }
+
+    });
     jQuery(document).ready(function(){
         jQuery('.window_chat').scrollbar();
     });
-})();
+
+    return {
+        ChessChat : ChessChat,
+    };
+
+});
+
